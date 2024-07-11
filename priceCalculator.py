@@ -6,6 +6,7 @@ from collections import defaultdict
 import os
 import datetime
 from openpyxl import load_workbook
+from openpyxl.styles import Font
 
 def close_window():
     root.destroy()
@@ -75,22 +76,34 @@ def processFile(filepath):
 
 def write_to_excel():
     # 将字典转换为 DataFrame
-    df_bp = pd.DataFrame(list(firmBP.items()), columns=['買入券商', '買入價格'])
-    df_bs = pd.DataFrame(list(firmBS.items()), columns=['買入券商', '買入張數'])
-    df_sp = pd.DataFrame(list(firmSP.items()), columns=['賣出券商', '賣出價格'])
-    df_ss = pd.DataFrame(list(firmSS.items()), columns=['賣出券商', '賣出張數'])
+    df_bp = pd.DataFrame(list(firmBP.items()), columns=['券商', '買入價格'])
+    df_bs = pd.DataFrame(list(firmBS.items()), columns=['券商', '買入張數'])
+    df_sp = pd.DataFrame(list(firmSP.items()), columns=['券商', '賣出價格'])
+    df_ss = pd.DataFrame(list(firmSS.items()), columns=['券商', '賣出張數'])
 
     # 合并买入和卖出数据
-    df_buy = pd.merge(df_bp, df_bs, on='買入券商', how='outer').sort_values(by='買入張數', ascending=False)
-    df_sell = pd.merge(df_sp, df_ss, on='賣出券商', how='outer').sort_values(by='賣出張數', ascending=False)
+    df_buy = pd.merge(df_bp, df_bs, on='券商', how='outer')
+    df_sell = pd.merge(df_sp, df_ss, on='券商', how='outer')
+
+    # 合并买卖数据
+    df_all = pd.merge(df_buy, df_sell, on='券商', how='outer', suffixes=('_買入', '_賣出')).fillna(0)
+
+    # 按买入张数排序
+    df_all = df_all.sort_values(by='買入張數', ascending=False)
+
+    # 计算盈虧(萬)
+    df_all['盈虧(萬)'] = round(((df_all['賣出價格'] * df_all['賣出張數']) - (df_all['買入價格'] * df_all['買入張數'])) / 10, 1)
+
+    # 移动券商列到第三列
+    broker_column = df_all.pop('券商')
+    df_all.insert(2, '券商', broker_column)
 
     # 创建一个ExcelWriter对象
     desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
     output_file = os.path.join(desktop, f'{stock_code}_{formatted_date}.xlsx')
     
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-        df_buy.to_excel(writer, sheet_name='買賣超', index=False, startrow=1)
-        df_sell.to_excel(writer, sheet_name='買賣超', index=False, startrow=1, startcol=len(df_buy.columns) + 1)
+        df_all.to_excel(writer, sheet_name='買賣超', index=False, startrow=1, startcol=1)
     
      # 调整列宽
     workbook = load_workbook(output_file)
@@ -99,6 +112,17 @@ def write_to_excel():
     for col in sheet.columns:
         column = col[0].column_letter  # 获取列字母
         sheet.column_dimensions[column].width = 15
+    
+    # 设置盈虧(萬)列的颜色
+    for cell in sheet['G']:  # 假设盈虧(萬)列是第9列（列I）
+        if cell.row == 1:  # 跳过标题行
+            continue
+        try:
+            value = float(cell.value)
+            if value < 0:
+                cell.font = Font(color="FF0000")  # 红色字体
+        except (ValueError, TypeError):
+            continue
 
     workbook.save(output_file)
     
@@ -131,7 +155,7 @@ label1 = tk.Label(frame, text="加入證交所個股交易量價CSV檔")
 label1.grid(row=0, column=0, columnspan=2, pady=(0, 10))
 
 # 添加第二个文字标签
-label2 = tk.Label(frame, text="This calculator-v1 powered by Michael")
+label2 = tk.Label(frame, text="This calculator-V2 powered by Michael")
 label2.grid(row=1, column=0, columnspan=2, pady=(0, 10))
 
 # 创建浏览按钮
