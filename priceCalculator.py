@@ -93,6 +93,7 @@ def write_to_excel():
 
     # 计算盈虧(萬)
     df_all['盈虧(萬)'] = round(((df_all['賣出價格'] * df_all['賣出張數']) - (df_all['買入價格'] * df_all['買入張數'])) / 10, 1)
+    df_all['買賣超(張)'] = df_all['買入張數'] - df_all['賣出張數']
 
     # 移动券商列到第三列
     broker_column = df_all.pop('券商')
@@ -114,7 +115,17 @@ def write_to_excel():
         sheet.column_dimensions[column].width = 15
     
     # 设置盈虧(萬)列的颜色
-    for cell in sheet['G']:  # 假设盈虧(萬)列是第9列（列I）
+    for cell in sheet['G']: 
+        if cell.row == 1:  # 跳过标题行
+            continue
+        try:
+            value = float(cell.value)
+            if value < 0:
+                cell.font = Font(color="FF0000")  # 红色字体
+        except (ValueError, TypeError):
+            continue
+    
+    for cell in sheet['H']: 
         if cell.row == 1:  # 跳过标题行
             continue
         try:
@@ -155,7 +166,7 @@ label1 = tk.Label(frame, text="加入證交所個股交易量價CSV檔")
 label1.grid(row=0, column=0, columnspan=2, pady=(0, 10))
 
 # 添加第二个文字标签
-label2 = tk.Label(frame, text="This calculator-V2 powered by Michael")
+label2 = tk.Label(frame, text="This calculator-V3 powered by Michael")
 label2.grid(row=1, column=0, columnspan=2, pady=(0, 10))
 
 # 创建浏览按钮
